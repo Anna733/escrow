@@ -1,0 +1,45 @@
+{
+  "name": "test-task",
+  "version": "1.0.0",
+  "description": "",
+  "main": "truffle-config.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "test": "npx truffle test",
+    "compile": "npx truffle compile",
+    "migrate": "npx truffle migrate",
+    "ganache": "npx ganache-cli --gasLimit 0xfffffffffff -e 10000000 --port 8545 -q",
+    "dev:coverage": "npx truffle run coverage"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Anna733/blockchain-card-game.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Anna733/blockchain-card-game/issues"
+  },
+  "homepage": "https://github.com/Anna733/blockchain-card-game#readme",
+  "dependencies": {
+    "@openzeppelin/contracts": "^3.4.1",
+    "@truffle/hdwallet-provider": "^1.4.1",
+    "dotenv": "^8.6.0",
+    "fs-extra": "^9.1.0",
+    "truffle": "^5.2.5"
+  },
+  "devDependencies": {
+    "@openzeppelin/test-helpers": "^0.5.10",
+    "@resolver-engine/imports": "^0.3.3",
+    "@resolver-engine/imports-fs": "^0.3.3",
+    "chai": "^4.3.4",
+    "chai-as-promised": "^7.1.1",
+    "chai-bn": "^0.2.1",
+    "ganache-cli": "^6.12.2",
+    "prettier-plugin-solidity": "^1.0.0-beta.6",
+    "solidity-coverage": "^0.7.16"
+  }
+}
