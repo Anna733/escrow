@@ -1,5 +1,5 @@
 {
-  "name": "test-task",
+  "name": "escrow",
   "version": "1.0.0",
   "description": "",
   "main": "truffle-config.js",
@@ -26,6 +26,7 @@
   "homepage": "https://github.com/Anna733/blockchain-card-game#readme",
   "dependencies": {
     "@openzeppelin/contracts": "^3.4.1",
+    "@openzeppelin/contracts-upgradeable": "^4.2.0",
     "@truffle/hdwallet-provider": "^1.4.1",
     "dotenv": "^8.6.0",
     "fs-extra": "^9.1.0",
