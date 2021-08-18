@@ -1,34 +1,24 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.6;
 import "./Accessible.sol";
-import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC721/IERC721Upgradeable.sol";
-import "@openzeppelin/contracts/math/SafeMath.sol";
 
 contract Escrow is Accessible {
-  using SafeMath for uint256;
-
-  address public buyer;
-  address public seller;
-  address public mediator;
+  using SafeERC20Upgradeable for IERC20Upgradeable;
 
   ///@notice ERC20 contract
   IERC20Upgradeable public token;
   ///@notice ERC721 contract
   IERC721Upgradeable public tokenNFT;
 
-  // ///@dev stakeholder -> stake
-  // mapping(address => uint256) internal stakes;
-
-  // ///@dev stakeNFTholder -> tokenId
-  // mapping(address => uint256) internal stakeNFT;
-
   enum State {
     None,
     AwaitingPayment,
     AwaitingDelivery,
-    Complete
+    Complete,
+    Cancel
   }
 
   struct Trade {
@@ -59,20 +49,20 @@ contract Escrow is Accessible {
   }
 
   modifier tradeExist(uint256 _tradeIndex) {
-    require(trades[tradeIndex].existence, "Trade doesn't exist");
+    require(trades[_tradeIndex].existence, "Trade doesn't exist");
     _;
   }
 
   modifier awaitingPayment(uint256 _tradeIndex) {
     require(
-      trades[tradeIndex].tradeState = State.AwaitingPayment,
+      trades[_tradeIndex].tradeState == State.AwaitingPayment,
       "Wrong state for execution "
     );
     _;
   }
   modifier awaitingDelivery(uint256 _tradeIndex) {
     require(
-      trades[tradeIndex].tradeState = State.AwaitingDelivery,
+      trades[_tradeIndex].tradeState == State.AwaitingDelivery,
       "Wrong state for execution "
     );
     _;
@@ -82,9 +72,9 @@ contract Escrow is Accessible {
     address _buyer,
     address _mediator
   ) {
-    require(seller == address(0), "Seller is zero address");
-    require(buyer == address(0), "Buyer is zero address");
-    require(mediator == address(0), "Mediator is zero address");
+    require(_seller == address(0), "Seller is zero address");
+    require(_buyer == address(0), "Buyer is zero address");
+    require(_mediator == address(0), "Mediator is zero address");
     _;
   }
 
@@ -127,7 +117,7 @@ contract Escrow is Accessible {
     uint256 indexed _tradeIndex
   );
 
-  event RevokeConfirm(
+  event CancelDelivery(
     address _mediator,
     address _buyer,
     address _seller,
@@ -135,19 +125,13 @@ contract Escrow is Accessible {
     uint256 indexed _tokenId,
     uint256 indexed _tradeIndex
   );
+  event CancelTrade(address rejecter, uint256 indexed _tradeIndex);
 
   function initialize(
     address _owner,
-    address _buyer,
-    address _seller,
-    address _mediator,
     IERC20Upgradeable _token,
     IERC721Upgradeable _tokenNFT
-  ) public initializer notZeroAddress(_seller, _buyer, _mediator) {
-    seller = _seller;
-    buyer = _buyer;
-    mediator = _mediator;
-
+  ) public initializer {
     token = _token;
     tokenNFT = _tokenNFT;
 
@@ -161,8 +145,12 @@ contract Escrow is Accessible {
     uint256 _amount,
     uint256 _tokenId
   ) external notZeroAddress(_seller, _buyer, _mediator) {
+    require(
+      msg.sender == _seller || msg.sender == _buyer,
+      "You must be seller or buyer"
+    );
     uint256 tradeIndex = trades.length;
-    require(!trades[tradeIndex].existance, "Trade already exists");
+    require(!trades[tradeIndex].existence, "Trade already exists");
     trades.push(
       Trade({
         buyer: _buyer,
@@ -171,7 +159,7 @@ contract Escrow is Accessible {
         amount: _amount,
         tokenId: _tokenId,
         tradeState: State.None,
-        existance: true
+        existence: true
       })
     );
 
@@ -181,7 +169,7 @@ contract Escrow is Accessible {
       _seller,
       _amount,
       _tokenId,
-      _tradeIndex
+      tradeIndex
     );
   }
 
@@ -191,33 +179,27 @@ contract Escrow is Accessible {
     onlySeller(_tradeIndex)
   {
     require(
-      trades[tradeIndex].tradeState == State.None,
+      trades[_tradeIndex].tradeState == State.None,
       "Wrong status for staking NFT"
     );
 
-    tokenNFT.safeTransferFrom(
-      msg.sender,
-      address(this),
-      trades[tradeIndex].tokenId
-    );
-    trades[tradeIndex].tradeState = State.AwaitingPayment;
+    uint256 tokenId = trades[_tradeIndex].tokenId;
+    tokenNFT.safeTransferFrom(msg.sender, address(this), tokenId);
+    trades[_tradeIndex].tradeState = State.AwaitingPayment;
 
-    emit StakedNFT(_seller, _tokenId, _tradeIndex);
+    emit StakedNFT(msg.sender, tokenId, _tradeIndex);
   }
 
   function stake(uint256 _tradeIndex)
     external
     tradeExist(_tradeIndex)
     onlyBuyer(_tradeIndex)
-    awatingPayment(_tradeIndex)
+    awaitingPayment(_tradeIndex)
   {
-    token.safeTransferFrom(
-      msg.sender,
-      address(this),
-      trades[tradeIndex].amount
-    );
-    trades[tradeIndex].tradeState = State.AwaitingDelivery;
-    emit Staked(_buyer, _amount, _tradeIndex);
+    uint256 amount = trades[_tradeIndex].amount;
+    token.safeTransferFrom(msg.sender, address(this), amount);
+    trades[_tradeIndex].tradeState = State.AwaitingDelivery;
+    emit Staked(msg.sender, amount, _tradeIndex);
   }
 
   function confirmDelivery(uint256 _tradeIndex)
@@ -226,54 +208,54 @@ contract Escrow is Accessible {
     onlyMediator(_tradeIndex)
     awaitingDelivery(_tradeIndex)
   {
-    token.safeTransferFrom(
-      trades[_tradeIndex].buyer,
-      trades[_tradeIndex].seller,
-      trades[tradeIndex].amount
-    );
+    token.safeTransfer(trades[_tradeIndex].seller, trades[_tradeIndex].amount);
     tokenNFT.safeTransferFrom(
-      trades[_tradeIndex].seller,
+      address(this),
       trades[_tradeIndex].buyer,
-      trades[tradeIndex].tokenId
+      trades[_tradeIndex].tokenId
     );
-    trades[tradeIndex].tradeState = State.Complete;
-    emit Confirmed(_mediator, _amount, _tradeIndex);
+    trades[_tradeIndex].tradeState = State.Complete;
+    emit Confirmed(msg.sender, trades[_tradeIndex].amount, _tradeIndex);
   }
 
   function unstake(uint256 _tradeIndex)
     external
-    onlyBuyer(_tradeIndex)
     tradeExist(_tradeIndex)
+    onlyBuyer(_tradeIndex)
     awaitingDelivery(_tradeIndex)
   {
     uint256 amount = trades[_tradeIndex].amount;
     uint256 tokenId = trades[_tradeIndex].tokenId;
     address seller = trades[_tradeIndex].seller;
 
-    stakes[msg.sender] = stakes[msg.sender].sub(amount);
+    token.safeTransfer(msg.sender, amount);
+    tokenNFT.safeTransferFrom(address(this), seller, tokenId);
+    cancelTrade(_tradeIndex);
+    trades[_tradeIndex].tradeState = State.Cancel;
 
-    token.transfer(msg.sender, amount);
-    tokenNFT.transfer(seller, tokenId);
-
+    emit CancelTrade(msg.sender, _tradeIndex);
     emit Unstaked(msg.sender, amount, _tradeIndex);
   }
 
   function unstakeNFT(uint256 _tradeIndex)
     external
-    onlySeller(_tradeIndex)
     tradeExist(_tradeIndex)
+    onlySeller(_tradeIndex)
     awaitingPayment(_tradeIndex)
   {
     uint256 tokenId = trades[_tradeIndex].tokenId;
-    tokenNFT.transfer(msg.sender, tokenId);
+    tokenNFT.safeTransferFrom(address(this), msg.sender, tokenId);
+    cancelTrade(_tradeIndex);
+    trades[_tradeIndex].tradeState = State.Cancel;
 
+    emit CancelTrade(msg.sender, _tradeIndex);
     emit UnstakedNFT(msg.sender, tokenId, _tradeIndex);
   }
 
-  function revokeDelivery(uint256 _tradeIndex)
+  function cancelDeliveryByMediator(uint256 _tradeIndex)
     external
-    onlyMediator(_tradeIndex)
     tradeExist(_tradeIndex)
+    onlyMediator(_tradeIndex)
     awaitingDelivery(_tradeIndex)
   {
     uint256 amount = trades[_tradeIndex].amount;
@@ -281,13 +263,26 @@ contract Escrow is Accessible {
     address seller = trades[_tradeIndex].seller;
     address buyer = trades[_tradeIndex].buyer;
 
-    token.transfer(buyer, amount);
-    tokenNFT.transfer(seller, tokenId);
+    token.safeTransfer(buyer, amount);
+    tokenNFT.safeTransferFrom(address(this), seller, tokenId);
+    cancelTrade(_tradeIndex);
+    trades[_tradeIndex].tradeState = State.Cancel;
 
-    emit RevokeConfirm(msg.sender, buyer, seller, amount, tokenId, _tradeIndex);
+    emit CancelDelivery(
+      msg.sender,
+      buyer,
+      seller,
+      amount,
+      tokenId,
+      _tradeIndex
+    );
   }
 
-  function getTradeState(uint256 _tradeIndex) external view {
+  function cancelTrade(uint256 _tradeIndex) internal tradeExist(_tradeIndex) {
+    delete trades[_tradeIndex];
+  }
+
+  function getTradeState(uint256 _tradeIndex) external view returns (State) {
     return trades[_tradeIndex].tradeState;
   }
 }
