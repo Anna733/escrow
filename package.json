@@ -41,6 +41,7 @@
     "chai-bn": "^0.2.1",
     "ganache-cli": "^6.12.2",
     "prettier-plugin-solidity": "^1.0.0-beta.6",
-    "solidity-coverage": "^0.7.16"
+    "solidity-coverage": "^0.7.16",
+    "solidity-docgen": "^0.5.11"
   }
 }
