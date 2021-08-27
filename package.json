@@ -11,29 +11,32 @@
     "compile": "npx truffle compile",
     "migrate": "npx truffle migrate",
     "ganache": "npx ganache-cli --gasLimit 0xfffffffffff -e 10000000 --port 8545 -q",
-    "dev:coverage": "npx truffle run coverage"
+    "dev:coverage": "npx truffle run coverage",
+    "dev:docgen": "npx solidity-docgen -i ./contracts -o ./docs -t docgen  -H docgen/helpers.js --solc-module ./node_modules/solc"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Anna733/blockchain-card-game.git"
+    "url": "git+https://github.com/Anna733/escrow"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/Anna733/blockchain-card-game/issues"
+    "url": "https://github.com/Anna733/escrow/issues"
   },
-  "homepage": "https://github.com/Anna733/blockchain-card-game#readme",
+  "homepage": "https://github.com/Anna733/escrow#readme",
   "dependencies": {
     "@openzeppelin/contracts": "^3.4.1",
     "@openzeppelin/contracts-upgradeable": "^4.2.0",
     "@truffle/hdwallet-provider": "^1.4.1",
     "dotenv": "^8.6.0",
     "fs-extra": "^9.1.0",
+    "solc": "^0.8.6",
     "truffle": "^5.2.5"
   },
   "devDependencies": {
     "@openzeppelin/test-helpers": "^0.5.10",
+    "@openzeppelin/truffle-upgrades": "^1.8.0",
     "@resolver-engine/imports": "^0.3.3",
     "@resolver-engine/imports-fs": "^0.3.3",
     "chai": "^4.3.4",
