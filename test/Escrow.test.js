@@ -29,7 +29,7 @@ contract.only("Escrow", async (accounts) => {
   const tradeIndex = new BN(0);
 
   let State = {
-    None: new BN(0),
+    AwaitingNFT: new BN(0),
     AwaitingPayment: new BN(1),
     AwaitingDelivery: new BN(2),
     Complete: new BN(3),
@@ -59,10 +59,10 @@ contract.only("Escrow", async (accounts) => {
       await escrow.stakeNFT(tradeIndex, {
         from: seller,
       });
-      await escrow.stake(tradeIndex, { from: buyer });
+      await escrow.stakeERC20(tradeIndex, { from: buyer });
       await expectRevert(
         escrow.confirmDelivery(tradeIndex),
-        "Sender is not mediator"
+        "Sender must be mediator"
       );
     });
     it(`only seller test`, async () => {
@@ -70,7 +70,7 @@ contract.only("Escrow", async (accounts) => {
       await escrow.createTrade(seller, mediator, buyer, amount, tokenId, {
         from: seller,
       });
-      await expectRevert(escrow.stakeNFT(tradeIndex), "Sender is not seller");
+      await expectRevert(escrow.stakeNFT(tradeIndex), "Sender must be seller");
     });
     it(`only buyer test`, async () => {
       await escrow.allowMediator(mediator);
@@ -80,8 +80,7 @@ contract.only("Escrow", async (accounts) => {
       await escrow.stakeNFT(tradeIndex, {
         from: seller,
       });
-      await escrow.stake(tradeIndex, { from: buyer });
-      await expectRevert(escrow.stake(tradeIndex), "Sender is not buyer");
+      await expectRevert(escrow.stakeERC20(tradeIndex), "Sender must be buyer");
     });
     it(`awaiting payment test`, async () => {
       await escrow.allowMediator(mediator);
@@ -91,10 +90,10 @@ contract.only("Escrow", async (accounts) => {
       await escrow.stakeNFT(tradeIndex, {
         from: seller,
       });
-      await escrow.stake(tradeIndex, { from: buyer });
+      await escrow.stakeERC20(tradeIndex, { from: buyer });
       await expectRevert(
-        escrow.stake(tradeIndex, { from: buyer }),
-        "Wrong state for execution"
+        escrow.stakeERC20(tradeIndex, { from: buyer }),
+        "State must be AwaitingPayment"
       );
     });
     it(`awaiting delivery test`, async () => {
@@ -105,14 +104,14 @@ contract.only("Escrow", async (accounts) => {
       await escrow.stakeNFT(tradeIndex, {
         from: seller,
       });
-      await escrow.stake(tradeIndex, { from: buyer });
+      await escrow.stakeERC20(tradeIndex, { from: buyer });
       await escrow.confirmDelivery(tradeIndex, { from: mediator });
       await expectRevert(
         escrow.confirmDelivery(tradeIndex, { from: mediator }),
-        "Wrong state for execution"
+        "State must be AwaitingDelivery"
       );
     });
-    it(`none state test`, async () => {
+    it(`awaiting NFT test`, async () => {
       await escrow.allowMediator(mediator);
       await escrow.createTrade(seller, mediator, buyer, amount, tokenId, {
         from: seller,
@@ -124,10 +123,10 @@ contract.only("Escrow", async (accounts) => {
         escrow.stakeNFT(tradeIndex, {
           from: seller,
         }),
-        "Wrong state for execution"
+        "State must be AwaitingNFT"
       );
     });
-    it(`not zero address test`, async () => {
+    it(`participants non zero address test`, async () => {
       await expectRevert(
         escrow.createTrade(
           constants.ZERO_ADDRESS,
@@ -136,7 +135,7 @@ contract.only("Escrow", async (accounts) => {
           amount,
           tokenId
         ),
-        "Seller is zero address"
+        "Seller must be non-zero address"
       );
       await expectRevert(
         escrow.createTrade(
@@ -146,7 +145,7 @@ contract.only("Escrow", async (accounts) => {
           amount,
           tokenId
         ),
-        "Mediator is zero address"
+        "Mediator must be non-zero address"
       );
       await expectRevert(
         escrow.createTrade(
@@ -156,7 +155,7 @@ contract.only("Escrow", async (accounts) => {
           amount,
           tokenId
         ),
-        "Buyer is zero address"
+        "Buyer must be non-zero address"
       );
     });
   });
@@ -189,14 +188,14 @@ contract.only("Escrow", async (accounts) => {
       tradeResult.mediator.should.equal(mediator);
       tradeResult.amount.should.bignumber.equal(amount);
       tradeResult.tokenId.should.bignumber.equal(tokenId);
-      tradeResult.tradeState.should.bignumber.equal(State.None);
+      tradeResult.tradeState.should.bignumber.equal(State.AwaitingNFT);
     });
     it(`shouldn't create trade by third party`, async () => {
       await expectRevert(
         escrow.createTrade(seller, mediator, buyer, amount, tokenId, {
           from: thirdParty,
         }),
-        "Sender isn't seller or buyer"
+        "Sender must be seller or buyer"
       );
     });
     it(`shouldn't create trade with not allowed mediator`, async () => {
@@ -204,7 +203,7 @@ contract.only("Escrow", async (accounts) => {
         escrow.createTrade(seller, mediator, buyer, amount, tokenId, {
           from: buyer,
         }),
-        "Not allowed mediator"
+        "Mediator must be allowed"
       );
     });
   });
@@ -227,13 +226,13 @@ contract.only("Escrow", async (accounts) => {
     const contractBalance = await erc721.balanceOf(escrow.address);
     contractBalance.should.bignumber.equal(tokenId);
   });
-  it(`Stake test`, async () => {
+  it(`Stake ERC20 test`, async () => {
     await escrow.allowMediator(mediator);
     await escrow.createTrade(seller, mediator, buyer, amount, tokenId, {
       from: seller,
     });
     await escrow.stakeNFT(tradeIndex, { from: seller });
-    const result = await escrow.stake(tradeIndex, { from: buyer });
+    const result = await escrow.stakeERC20(tradeIndex, { from: buyer });
     expectEvent(result, "Staked", {
       _buyer: buyer,
       _amount: amount,
@@ -253,11 +252,12 @@ contract.only("Escrow", async (accounts) => {
       from: seller,
     });
     await escrow.stakeNFT(tradeIndex, { from: seller });
-    await escrow.stake(tradeIndex, { from: buyer });
+    await escrow.stakeERC20(tradeIndex, { from: buyer });
     const result = await escrow.confirmDelivery(tradeIndex, { from: mediator });
     expectEvent(result, "Confirmed", {
       _mediator: mediator,
       _amount: amount,
+      _tokenId: tokenId,
       _tradeIndex: tradeIndex,
     });
     const tradeResult = await escrow.trades(tradeIndex);
@@ -270,37 +270,83 @@ contract.only("Escrow", async (accounts) => {
     const contractBalance = await erc20.balanceOf(escrow.address);
     contractBalance.should.bignumber.equal(new BN(0));
   });
-  it(`Unstake test`, async () => {
-    await escrow.allowMediator(mediator);
-    await escrow.createTrade(seller, mediator, buyer, amount, tokenId, {
-      from: seller,
+  describe(`Unstake ERC20 test test`, () => {
+    it(`Should be able to unstake ERC20 by buyer`, async () => {
+      await escrow.allowMediator(mediator);
+      await escrow.createTrade(seller, mediator, buyer, amount, tokenId, {
+        from: seller,
+      });
+      await escrow.stakeNFT(tradeIndex, { from: seller });
+      await escrow.stakeERC20(tradeIndex, { from: buyer });
+      const result = await escrow.unstakeERC20(tradeIndex, { from: buyer });
+
+      expectEvent(result, "UnstakedERC20", {
+        _rejecter: buyer,
+        _amount: amount,
+        _tradeIndex: tradeIndex,
+      });
+
+      expectEvent(result, "CanceledTrade", {
+        _rejecter: buyer,
+        _tradeIndex: tradeIndex,
+      });
+      const tradeResult = await escrow.trades(tradeIndex);
+      tradeResult.tradeState.should.bignumber.equal(State.Cancel);
+
+      const buyerBalance = await erc20.balanceOf(buyer);
+      buyerBalance.should.bignumber.equal(amount);
+      const sellerBalance = await erc721.balanceOf(seller);
+      sellerBalance.should.bignumber.equal(tokenId);
+
+      const contractTokenBalance = await erc20.balanceOf(escrow.address);
+      contractTokenBalance.should.bignumber.equal(new BN(0));
+      const contractNFTBalance = await erc721.balanceOf(escrow.address);
+      contractNFTBalance.should.bignumber.equal(new BN(0));
     });
-    await escrow.stakeNFT(tradeIndex, { from: seller });
-    await escrow.stake(tradeIndex, { from: buyer });
-    const result = await escrow.unstake(tradeIndex, { from: buyer });
+    it(`Should be able to unstake ERC20 by seller`, async () => {
+      await escrow.allowMediator(mediator);
+      await escrow.createTrade(seller, mediator, buyer, amount, tokenId, {
+        from: seller,
+      });
+      await escrow.stakeNFT(tradeIndex, { from: seller });
+      await escrow.stakeERC20(tradeIndex, { from: buyer });
+      const result = await escrow.unstakeERC20(tradeIndex, { from: seller });
 
-    expectEvent(result, "Unstaked", {
-      _buyer: buyer,
-      _amount: amount,
-      _tradeIndex: tradeIndex,
+      expectEvent(result, "UnstakedERC20", {
+        _rejecter: seller,
+        _amount: amount,
+        _tradeIndex: tradeIndex,
+      });
+
+      expectEvent(result, "CanceledTrade", {
+        _rejecter: seller,
+        _tradeIndex: tradeIndex,
+      });
+      const tradeResult = await escrow.trades(tradeIndex);
+      tradeResult.tradeState.should.bignumber.equal(State.Cancel);
+
+      const buyerBalance = await erc20.balanceOf(buyer);
+      buyerBalance.should.bignumber.equal(amount);
+      const sellerBalance = await erc721.balanceOf(seller);
+      sellerBalance.should.bignumber.equal(tokenId);
+
+      const contractTokenBalance = await erc20.balanceOf(escrow.address);
+      contractTokenBalance.should.bignumber.equal(new BN(0));
+      const contractNFTBalance = await erc721.balanceOf(escrow.address);
+      contractNFTBalance.should.bignumber.equal(new BN(0));
     });
-
-    expectEvent(result, "CanceledTrade", {
-      _rejecter: buyer,
-      _tradeIndex: tradeIndex,
+    it(`Shouldn't be able to unstake ERC20 by third party`, async () => {
+      await escrow.allowMediator(mediator);
+      await escrow.createTrade(seller, mediator, buyer, amount, tokenId, {
+        from: seller,
+      });
+      await escrow.stakeNFT(tradeIndex, { from: seller });
+      await escrow.stakeERC20(tradeIndex, { from: buyer });
+      await expectRevert(
+        escrow.unstakeERC20(tradeIndex, { from: thirdParty }),
+        "Sender must be seller or buyer"
+      );
     });
-    const tradeResult = await escrow.trades(tradeIndex);
-    tradeResult.tradeState.should.bignumber.equal(State.Cancel);
-
-    const buyerBalance = await erc20.balanceOf(buyer);
-    buyerBalance.should.bignumber.equal(amount);
-    const sellerBalance = await erc721.balanceOf(seller);
-    sellerBalance.should.bignumber.equal(tokenId);
-
-    const contractTokenBalance = await erc20.balanceOf(escrow.address);
-    contractTokenBalance.should.bignumber.equal(new BN(0));
-    const contractNFTBalance = await erc721.balanceOf(escrow.address);
-    contractNFTBalance.should.bignumber.equal(new BN(0));
   });
   it(`Unstake NFT test`, async () => {
     await escrow.allowMediator(mediator);
@@ -339,7 +385,7 @@ contract.only("Escrow", async (accounts) => {
       from: seller,
     });
     await escrow.stakeNFT(tradeIndex, { from: seller });
-    await escrow.stake(tradeIndex, { from: buyer });
+    await escrow.stakeERC20(tradeIndex, { from: buyer });
     const result = await escrow.cancelDeliveryByMediator(tradeIndex, {
       from: mediator,
     });
